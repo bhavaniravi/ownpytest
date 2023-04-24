@@ -33,3 +33,16 @@ def test_divide():
 def test_eval(test_input, expected):
     print("====", test_input, expected)
     assert eval(test_input) == expected
+
+
+@owntest.fixture
+def fixture_data():
+    return [
+        {"input": "3+5", "expected": 8},
+        {"input": "2+5", "expected": 7},
+        {"input": "6*9", "expected": 54},
+    ]
+
+
+def test_eval(fixture_data):
+    assert all(eval(d["input"]) == d["expected"] for d in fixture_data)
