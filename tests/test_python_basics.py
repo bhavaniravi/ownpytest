@@ -1,18 +1,20 @@
-from example.example import add, subtract, multiply, divide
 import owntest
+import sqlite3
+
+from example.example import add, subtract, multiply, divide
 
 
 def test_add():
     assert add(2, 3) == 5
     assert add(2, 3, 5, 6, 8) == 24
     with owntest.raises(TypeError):
-        multiply("a", 3)
+        add(3, 3)
 
 
 def test_subtract():
     assert subtract(2, 3) == -1
     with owntest.raises(TypeError):
-        multiply("a", 3)
+        subtract("a", 3)
 
 
 def test_multiply():
@@ -26,7 +28,7 @@ def test_divide():
     with owntest.raises(ZeroDivisionError):
         divide(6, 0)
     with owntest.raises(TypeError):
-        multiply("a", 3)
+        divide("a", 3)
 
 
 @owntest.parametrize("test_input,expected", [("3+5", 8), ("2+4", 6), ("6*9", 54)])
@@ -35,13 +37,13 @@ def test_eval(test_input, expected):
 
 
 @owntest.fixture
-def fixture_data():
-    return [
-        {"input": "3+5", "expected": 8},
-        {"input": "2+5", "expected": 7},
-        {"input": "6*9", "expected": 54},
-    ]
+def conn_fixture():
+    conn = sqlite3.connect("test.db")
+    yield conn
+    conn.close()
+    yield conn
 
 
-def test_eval(fixture_data):
-    assert all(eval(d["input"]) == d["expected"] for d in fixture_data)
+def test_conn(conn_fixture):
+    with owntest.raises(sqlite3.OperationalError):
+        assert conn_fixture.execute("SELECT * FROM test").fetchall() == [(1, "test")]

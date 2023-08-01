@@ -1,4 +1,6 @@
 def test_type(func):
+    """Tests that the type of the arguments are int."""
+
     def wrapper(*args, **kwargs):
         for arg in args:
             if type(arg) != int:
