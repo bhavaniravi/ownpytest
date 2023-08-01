@@ -3,7 +3,7 @@ def test_type(func):
 
     def wrapper(*args, **kwargs):
         for arg in args:
-            if type(arg) != int:
+            if not isinstance(arg, int):
                 raise TypeError
         return func(*args, **kwargs)
 

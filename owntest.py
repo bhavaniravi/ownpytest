@@ -40,11 +40,6 @@ def test_runner():
             for members in getmembers(module, isfunction):
                 # creating a mapping of fixtures as we find functions with fixture decorator
                 if "fixture_wrapper" in members[1].__name__:
-                    count_of_yield = count_yields_in_function(members[1].__wrapped__)
-                    if count_of_yield > 1:
-                        raise Exception(
-                            f"Fixture member {members[0]} cannot yield more than once"
-                        )
                     fixtures_mapping[members[0]] = members[1]
 
                 elif members[0].startswith("test"):
@@ -110,7 +105,10 @@ class raises:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # print("exit", exc_type, exc_val, exc_tb, self.exception)
+
         if exc_type != self.exception:
+            print(f"expected={self.exception}, got={exc_type}")
+
             raise AssertionError(f"expected={self.exception}, got={exc_type}")
         return True
 

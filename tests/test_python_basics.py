@@ -8,7 +8,7 @@ def test_add():
     assert add(2, 3) == 5
     assert add(2, 3, 5, 6, 8) == 24
     with owntest.raises(TypeError):
-        add(3, 3)
+        add("a", 3)
 
 
 def test_subtract():
