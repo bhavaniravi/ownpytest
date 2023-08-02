@@ -1,24 +1,46 @@
-def test_runner():
-    errors = {}
-    global fixtures_mapping
-    # get folder starts with tests in the current python path
+import os
+import sys
+import importlib
+from inspect import getmembers, isfunction
+
+fixtures_mapping = {}
+
+
+def get_test_files():
     for dr in os.listdir(sys.path[0]):
         if dr != "tests":
             continue
         for files in os.listdir(dr):
             if not (files.startswith("test") and files.endswith(".py")):
                 continue
-            # load the python module
-            module = importlib.import_module(dr + "." + files[:-3])
-            for members in getmembers(module, isfunction):
+            yield dr + "." + files[:-3]
+
+
+def get_test_functions(file_path):
+    module = importlib.import_module(file_path)
+    for members in getmembers(module, isfunction):
+        if "fixture_wrapper" in members[1].__name__:
+            fixtures_mapping[members[0]] = members[1]
+        elif members[0].startswith("test_"):
+            yield members
+
+
+def test_runner():
+    errors = {}
+    # get folder starts with tests in the current python path
+    for dr in os.listdir(sys.path[0]):
+        if dr != "tests":
+            continue
+        for files in get_test_files():
+            for members in get_test_functions(files):
+                test_function_name = members[0]
+                test_function_object = members[1]
                 # creating a mapping of fixtures as we find functions with fixture decorator
-                pass
+
     if errors:
         print("\n------------------------ Errors -----------------------------------")
     else:
         print("\n------------- Success (No errors found) ---------------------------")
-    for member, ex in errors.items():
-        pass
 
 
 class raises:

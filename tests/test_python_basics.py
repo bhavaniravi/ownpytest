@@ -41,7 +41,6 @@ def conn_fixture():
     conn = sqlite3.connect("test.db")
     yield conn
     conn.close()
-    yield conn
 
 
 def test_conn(conn_fixture):
