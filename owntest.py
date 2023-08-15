@@ -1,99 +1,87 @@
 import os
-import importlib
-import traceback
-from inspect import getmembers, isfunction, getsource
 import sys
-import ast
-
-# from tests import test_python_basics
+import importlib
+from inspect import getmembers, isfunction
+import traceback
 
 fixtures_mapping = {}
 
 
-def count_yields_in_function(func):
-    source = getsource(func)
-    parsed_ast = ast.parse(source)
+def get_traceback(ex):
+    tb = ex.__traceback__
+    trace = []
+    while tb is not None:
+        if tb.tb_next is None:
+            break
+        tb = tb.tb_next
 
-    def count_yields(node):
-        if isinstance(node, ast.Yield):
-            return 1
-        count = 0
-        for child_node in ast.iter_child_nodes(node):
-            count += count_yields(child_node)
-        return count
-
-    return count_yields(parsed_ast)
-
-
-def test_runner():
-    errors = {}
-    global fixtures_mapping
-    # get folder starts with tests in the current python path
-    for dr in os.listdir(sys.path[0]):
-        if dr != "tests":
-            continue
-        for files in os.listdir(dr):
-            if not (files.startswith("test") and files.endswith(".py")):
-                continue
-            # load the python module
-            module = importlib.import_module(dr + "." + files[:-3])
-            for members in getmembers(module, isfunction):
-                # creating a mapping of fixtures as we find functions with fixture decorator
-                if "fixture_wrapper" in members[1].__name__:
-                    fixtures_mapping[members[0]] = members[1]
-
-                elif members[0].startswith("test"):
-                    print(
-                        "Running test",
-                        members[0],
-                        # members[1],
-                        # members[1].__code__.co_varnames,
-                    )
-                    func_args = []
-                    for arg in members[1].__code__.co_varnames:
-                        # if the argument is a fixture, call the fixture and persist the result
-                        # if that in itself is a fixture, the we have a problem
-                        if arg in fixtures_mapping:
-                            fixture_return_value = fixtures_mapping[arg]()
-                            # check if generator
-                            if hasattr(fixture_return_value, "__next__"):
-                                print("yielding generator")
-                                func_args.append(next(fixture_return_value))
-                                print("after yielding generator")
-                            else:
-                                func_args.append(fixture_return_value)
-                    try:
-                        members[1](*func_args)
-                    except AssertionError as e:
-                        errors[members[1]] = e
-    if errors:
-        print("\n------------------------ Errors -----------------------------------")
-    else:
-        print(
-            "\n------------------------ Success (No errors found) -----------------------------------"
-        )
-    for member, ex in errors.items():
-        # print(member.__name__)
-
-        # tb = e.__traceback__
-        # print(dir(tb.tb_frame.f_code.co_lnotab))
-        # print(tb.tb_lineno, tb.tb_frame.f_code.co_filename)  # TypeError  # 2
-        tb = ex.__traceback__
-        while tb is not None:
-            if tb.tb_next is None:
-                break
-            tb = tb.tb_next
-
-        trace = []
         trace.append(
             {
                 "filename": tb.tb_frame.f_code.co_filename,
                 "name": tb.tb_frame.f_code.co_name,
                 "lineno": tb.tb_lineno,
                 "traceback": traceback.format_tb(tb),
+                "message": ex.args,
             }
         )
-        print(type(ex).__name__, trace)
+    return trace
+
+
+def get_test_files():
+    for dr in os.listdir(sys.path[0]):
+        if dr != "tests":
+            continue
+        for files in os.listdir(dr):
+            if not (files.startswith("test") and files.endswith(".py")):
+                continue
+            yield dr + "." + files[:-3]
+
+
+def get_test_functions(file_path):
+    module = importlib.import_module(file_path)
+    for members in getmembers(module, isfunction):
+        if members[0].startswith("test_"):
+            yield members
+        elif "fixture_wrapper" in members[1].__name__:
+            fixtures_mapping[members[0]] = members[1]
+
+
+def test_runner():
+    errors = {}
+    # get folder starts with tests in the current python path
+    for dr in os.listdir(sys.path[0]):
+        if dr != "tests":
+            continue
+        for files in get_test_files():
+            for test_function_name, test_function_object in get_test_functions(files):
+
+                test_args = test_function_object.__code__.co_varnames
+                # Run the tests here
+                print("Running test: ", test_function_name)
+                test_args_to_pass = []
+                for arg in test_args:
+                    if arg in fixtures_mapping:
+                        fixture_return_value = fixtures_mapping[arg]()
+                        # check if generator
+                        if hasattr(fixture_return_value, "__next__"):
+                            print("yielding generator")
+                            test_args_to_pass.append(next(fixture_return_value))
+                            print("after yielding generator")
+                        else:
+                            test_args_to_pass.append(fixture_return_value)
+                    else:
+                        test_args_to_pass.append(arg)
+                try:
+                    test_function_object(*test_args_to_pass)
+                except AssertionError as err:
+                    errors[test_function_name] = err
+
+    if errors:
+        print("\n------------------------ Errors -----------------------------------")
+        for test_name, err in errors.items():
+            print(f"{test_name} failed with error: {get_traceback(err)}")
+    else:
+        print("\n------------- Success (No errors found) ---------------------------")
 
 
 class raises:
@@ -104,12 +92,13 @@ class raises:
         pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # print("exit", exc_type, exc_val, exc_tb, self.exception)
 
-        if exc_type != self.exception:
-            print(f"expected={self.exception}, got={exc_type}")
-
-            raise AssertionError(f"expected={self.exception}, got={exc_type}")
+        if exc_type is None:
+            raise AssertionError(f"{self.exception} not raised")
+        if exc_type is not self.exception:
+            raise AssertionError(
+                f"expected={self.exception} got \n {get_traceback(exc_val)}"
+            ) from exc_val
         return True
 
 
@@ -120,11 +109,7 @@ def parametrize(keys, values):
         params = []
         # params = [{"test_input": "3+5", "expected": 8}, {"test_input": "2+4", "expected": 6}, {"test_input": "6*9", "expected": 54}]
         for value in values:
-            param = {}
-            for i, key in enumerate(keys.split(",")):
-                param[key] = value[i]
-            params.append(param)
-
+            params.append(dict(zip(keys.split(","), value)))
         # the function, to run subtests
         def wrapper(*args, **kwargs):
             """Runs the original test function with multiple params"""
@@ -137,9 +122,9 @@ def parametrize(keys, values):
     return decorator
 
 
-# all we do is mark it as fixture
 def fixture(function):
     def fixture_wrapper():
+        # doesn't support yielding functions
         return function()
 
     return fixture_wrapper

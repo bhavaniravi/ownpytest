@@ -1,4 +1,4 @@
-import owntest
+import owntest as owntest
 import sqlite3
 
 from example.example import add, subtract, multiply, divide
