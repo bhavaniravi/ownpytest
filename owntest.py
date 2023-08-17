@@ -64,9 +64,7 @@ def test_runner():
                         fixture_return_value = fixtures_mapping[arg]()
                         # check if generator
                         if hasattr(fixture_return_value, "__next__"):
-                            print("yielding generator")
                             test_args_to_pass.append(next(fixture_return_value))
-                            print("after yielding generator")
                         else:
                             test_args_to_pass.append(fixture_return_value)
                     else:
@@ -124,7 +122,6 @@ def parametrize(keys, values):
 
 def fixture(function):
     def fixture_wrapper():
-        # doesn't support yielding functions
         return function()
 
     return fixture_wrapper
