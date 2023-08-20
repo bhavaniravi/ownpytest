@@ -1,7 +1,7 @@
 import os
 import sys
 import importlib
-from inspect import getmembers, isfunction
+from inspect import getmembers, isfunction, isgeneratorfunction
 import traceback
 
 fixtures_mapping = {}
@@ -59,22 +59,32 @@ def test_runner():
                 # Run the tests here
                 print("Running test: ", test_function_name)
                 test_args_to_pass = []
+                generator_fixtures = []
                 for arg in test_args:
                     if arg in fixtures_mapping:
-                        fixture_return_value = fixtures_mapping[arg]()
+                        fixture_function = fixtures_mapping[arg]
                         # check if generator
-                        if hasattr(fixture_return_value, "__next__"):
-                            print("yielding generator")
-                            test_args_to_pass.append(next(fixture_return_value))
-                            print("after yielding generator")
+                        if isgeneratorfunction(fixture_function):
+                            fixture_generator = fixture_function()
+                            fixture_return_value = next(fixture_generator)
+                            # Save for later so we can tear down
+                            generator_fixtures.append(fixture_generator)
                         else:
-                            test_args_to_pass.append(fixture_return_value)
+                            fixture_return_value = fixture_function()
+                        test_args_to_pass.append(fixture_return_value)
                     else:
                         test_args_to_pass.append(arg)
                 try:
                     test_function_object(*test_args_to_pass)
                 except AssertionError as err:
                     errors[test_function_name] = err
+                finally:
+                    # Tear down all the generator based fixtures
+                    for fixture_return_value in generator_fixtures:
+                        try:
+                            next(fixture_return_value)
+                        except StopIteration:
+                            pass
 
     if errors:
         print("\n------------------------ Errors -----------------------------------")
@@ -121,14 +131,8 @@ def parametrize(keys, values):
 
     return decorator
 
-
 def fixture(function):
-    def fixture_wrapper():
-        # doesn't support yielding functions
-        return function()
+    fixtures_mapping[function.__name__] = function
 
-    return fixture_wrapper
+    return fixture
 
-
-if __name__ == "__main__":
-    test_runner()
