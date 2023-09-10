@@ -50,7 +50,9 @@ def test_runner():
     # get folder starts with tests in the current python path
     for files in get_test_files():
         for test_function_name, test_function_object in get_test_functions(files):
-            pass
+            test_args = test_function_object.__code__.co_varnames
+            # Run the tests here
+            print("Running test: ", test_function_name)
 
     if errors:
         print("\n------------------------ Errors -----------------------------------")
