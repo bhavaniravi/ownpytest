@@ -68,7 +68,10 @@ class raises:
         pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+        if isinstance(exc_val, self.exception):
+            return True
+        else:
+            raise AssertionError(f"Expected {self.exception}, got {exc_val}")
 
 
 def parametrize(keys, values):
